@@ -284,6 +284,19 @@ function setupAutocompletes() {
   document.getElementById('sel-vehicule').addEventListener('change', () => refreshLinkedAutocompletes(null));
 }
 
+/* ---------------------------- RAZ (réinitialisation du formulaire) ---------------------------- */
+function resetSearchForm() {
+  document.getElementById('sel-vehicule').value = '';
+  document.getElementById('sel-sens').value = '';
+  document.getElementById('input-nomligne').value = '';
+  document.getElementById('input-terminus').value = '';
+  document.getElementById('input-arret').value = '';
+  document.getElementById('input-commune').value = '';
+  // Ferme les listes d'autocomplétion éventuellement ouvertes
+  document.querySelectorAll('.autocomplete-list.open').forEach(l => l.classList.remove('open'));
+  toast("Critères de recherche réinitialisés.");
+}
+
 /* ---------------------------- Recherche + résultats ---------------------------- */
 function runSearch() {
   const criteria = {
@@ -711,6 +724,7 @@ function afterLoginBoot() {
   setupInstallPrompt();
 
   document.getElementById('btn-search').addEventListener('click', runSearch);
+  document.getElementById('btn-raz').addEventListener('click', resetSearchForm);
   document.getElementById('btn-back-search').addEventListener('click', () => showView('view-recherche'));
 
   applyToggleVisibility();
