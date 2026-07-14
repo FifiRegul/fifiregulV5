@@ -1,0 +1,42 @@
+# =========================================================
+# FIFI RÉGUL — .gitignore
+# =========================================================
+
+# Fichiers système d'exploitation
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs / IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Archives générées localement (ne pas versionner le zip de livraison)
+*.zip
+*.rar
+*.7z
+
+# Fichiers temporaires / de sauvegarde
+*.tmp
+*.bak
+*.log
+~$*
+
+# Exports temporaires générés par la rubrique Administrateur
+# (le téléchargement de svarrettbm.json / communes.json via le bouton
+# "Mise à jour Base" se fait dans le dossier Téléchargements du navigateur,
+# pas dans le projet — ces lignes évitent tout ajout accidentel d'un
+# double export laissé par erreur à la racine)
+/svarrettbm (*).json
+/communes (*).json
+/*.xlsx.bak
+
+# Dépendances Node éventuelles si vous régénérez js/lib/ localement
+node_modules/
+package-lock.json
+
+# Ne PAS ignorer les données et librairies nécessaires au fonctionnement :
+# data/*.json, js/lib/*.js, css/lib/*.css, images/, icons/, API_arrets_TBM.xlsx
+# sont indispensables au site et doivent rester versionnés.
