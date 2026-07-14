@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FIFI RÉGUL — Géolocalisation des arrêts TBM</title>
+<meta name="theme-color" content="#12233D">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/lib/leaflet.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Écran de chargement obligatoire (image de fond bus-bg, 3 secondes minimum) -->
+<div id="bus-bg-splash">
+  <div class="spinner"></div>
+  <div class="splash-title">FIFI RÉGUL</div>
+  <div class="splash-sub">Chargement des données arrêts TBM…</div>
+</div>
+
+<!-- ÉCRAN D'INSCRIPTION / CONNEXION (affiché avant toute autre vue) -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <img class="auth-logo" src="images/imagelogoTBM/logo.png" alt="Logo TBM" onerror="this.style.display='none'">
+    <h1 class="auth-title">FIFI RÉGUL</h1>
+    <p class="auth-sub">Connexion agent</p>
+
+    <!-- Étape 1 : saisie du code -->
+    <div id="auth-step-login">
+      <div class="field">
+        <label for="auth-code">Code de connexion</label>
+        <input type="text" id="auth-code" placeholder="Ex. M11222" maxlength="6" autocomplete="username" autocapitalize="characters">
+      </div>
+      <button class="btn btn-primary" id="btn-auth-validate">Valider</button>
+      <p class="locked-note" id="auth-error" style="color:var(--danger);display:none;"></p>
+
+      <div id="auth-unknown-block" style="display:none;margin-top:14px;">
+        <div class="confirm-banner">
+          Code non reconnu. Une demande d'accès doit être validée par l'administrateur.
+        </div>
+        <div class="field">
+          <label for="auth-req-matricule">Votre matricule</label>
+          <input type="text" id="auth-req-matricule" placeholder="Ex. 11222">
+        </div>
+        <div class="field">
+          <label for="auth-req-nom">Nom, prénom</label>
+          <input type="text" id="auth-req-nom" placeholder="Nom Prénom">
+        </div>
+        <div class="field">
+          <label for="auth-req-poste">Poste occupé (TBM)</label>
+          <input type="text" id="auth-req-poste" placeholder="Ex. Conducteur-Receveur">
+        </div>
+        <button class="btn btn-danger" id="btn-request-access">✉️ Demander l'accès par e-mail</button>
+      </div>
+    </div>
+
+    <!-- Étape 2 : CGU (première utilisation uniquement) -->
+    <div id="auth-step-cgu" style="display:none;">
+      <div class="cgu-box">
+        <p><strong>Important :</strong></p>
+        <p>FIFIRegul est une application indépendante et non officielle. Elle n'a aucun lien avec TBM, ni KB2M.</p>
+        <p>Cet outil est conçu pour aider les agents, mais ne remplace en aucun cas la connaissance du terrain,
+           l'expérience professionnelle, ni les procédures officielles.</p>
+        <p>L'utilisation de l'application se fait sous l'entière responsabilité de l'utilisateur.</p>
+        <p>Aucune réclamation, responsabilité ou poursuite ne pourra être engagée à l'encontre du créateur de
+           FIFIRegul.</p>
+        <p>En cochant la case ci-dessous, vous reconnaissez avoir lu, compris et accepté ces conditions.</p>
+      </div>
+      <label class="cgu-check">
+        <input type="checkbox" id="auth-cgu-checkbox">
+        <span>J'ai lu et j'accepte les Conditions Générales d'Utilisation</span>
+      </label>
+      <button class="btn btn-primary" id="btn-cgu-continue" disabled>Continuer</button>
+    </div>
+
+    <!-- Étape 3 : rappel du code (première inscription uniquement) -->
+    <div id="auth-step-remember" style="display:none;">
+      <div class="confirm-banner">
+        Notez bien votre code de connexion personnel, il vous sera demandé à chaque ouverture de l'application :
+      </div>
+      <div class="auth-code-reminder" id="auth-code-reminder-value">------</div>
+      <button class="btn btn-primary" id="btn-remember-ack">J'ai noté mon code, continuer</button>
+    </div>
+
+    <!-- Étape 4 : mot de bienvenue (3 secondes) -->
+    <div id="auth-step-welcome" style="display:none;">
+      <div class="auth-welcome" id="auth-welcome-text">Bonjour !</div>
+    </div>
+
+    <p class="auth-footnote">Site non officiel à usage privé et restreint, aucune réclamation possible !</p>
+  </div>
+</div>
+
+<div class="app-shell" id="app-shell" style="display:none;">
+
+  <header class="app-header">
+    <img class="logo" src="images/imagelogoTBM/logo.png" alt="Logo TBM" onerror="this.style.display='none'">
+    <div class="titles">
+      <span class="app-name">FIFI RÉGUL</span>
+      <span class="app-sub">Géolocalisation des arrêts TBM</span>
+    </div>
+    <button class="admin-lock" id="btn-open-admin" title="Rubrique Administrateur">🔒</button>
+  </header>
+
+  <!-- Bandeau d'installation PWA (affiché une seule fois si dispo) -->
+  <div class="install-banner" id="install-banner" style="display:none;">
+    <span>📲 Installez FIFI Régul sur votre écran d'accueil pour un accès plus rapide.</span>
+    <div style="display:flex;gap:8px;flex:none;">
+      <button class="btn btn-primary btn-sm" id="btn-install-app">Installer</button>
+      <button class="btn btn-secondary btn-sm" id="btn-dismiss-install">Plus tard</button>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- VUE 1 : FIFI RECHERCHE -->
+    <section id="view-recherche" class="view active">
+
+      <div class="section-title">
+        <img src="images/FIFIRecherche.png" alt="" onerror="this.style.display='none'">
+        <div>
+          <h1>FIFI Recherche</h1>
+          <p>Renseignez un ou plusieurs critères, pas besoin de tout remplir</p>
+        </div>
+      </div>
+
+      <div class="gps-badge" id="gps-badge">
+        <span class="dot off" id="gps-dot"></span>
+        <div style="flex:1;">
+          <div class="gps-text" id="gps-text">Position GPS non détectée</div>
+        </div>
+      </div>
+      <div class="mini-map" id="user-mini-map" style="height:150px;border-radius:14px;overflow:hidden;margin:-6px 0 14px;box-shadow:var(--shadow);"></div>
+
+      <div class="card">
+        <div class="grid-2">
+          <div class="field" id="field-vehicule">
+            <label for="sel-vehicule">Véhicule</label>
+            <select id="sel-vehicule">
+              <option value="">Tous</option>
+            </select>
+          </div>
+          <div class="field" id="field-sens">
+            <label for="sel-sens">Sens ligne</label>
+            <select id="sel-sens">
+              <option value="">Indifférent</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field" id="field-nomligne">
+            <label for="input-nomligne">Nom de la ligne</label>
+            <div class="autocomplete-wrap">
+              <input type="text" id="input-nomligne" placeholder="Ex. 01, 15...">
+              <div class="autocomplete-list" id="list-nomligne"></div>
+            </div>
+          </div>
+          <div class="field" id="field-terminus">
+            <label for="input-terminus">Départ &amp; Terminus ligne</label>
+            <div class="autocomplete-wrap">
+              <input type="text" id="input-terminus" placeholder="Ex. Bordeaux Quinconces...">
+              <div class="autocomplete-list" id="list-terminus"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field" id="field-arret">
+          <label for="input-arret">Nom de l'arrêt</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="input-arret" placeholder="Ex. Gambetta...">
+            <div class="autocomplete-list" id="list-arret"></div>
+          </div>
+        </div>
+
+        <div class="field" id="field-commune">
+          <label for="input-commune">Commune</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="input-commune" placeholder="Ex. Cenon 33150...">
+            <div class="autocomplete-list" id="list-commune"></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-search">🔍 Rechercher</button>
+      </div>
+
+    </section>
+
+    <!-- VUE 2 : FIFI RESULTAT(S) -->
+    <section id="view-resultats" class="view">
+      <div class="section-title">
+        <img src="images/FIFIResultat.png" alt="" onerror="this.style.display='none'">
+        <div>
+          <h1>FIFI Résultat(s)</h1>
+          <p id="resultats-count">0 résultat</p>
+        </div>
+      </div>
+
+      <div id="resultats-list"></div>
+
+      <button class="btn btn-secondary" id="btn-back-search" style="margin-top:6px;">← Nouvelle recherche</button>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <div class="inner">Site non officiel à usage privé et restreint, aucune réclamation possible !</div>
+  </footer>
+</div>
+
+<!-- MODALE : SIGNALEMENT D'ERREUR DE GEOLOCALISATION -->
+<div class="modal-overlay" id="modal-report">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>Signaler une erreur de géolocalisation</h2>
+      <button class="modal-close" data-close="modal-report">✕</button>
+    </div>
+
+    <div class="confirm-banner" id="report-ack-banner">
+      ⚠️ Cette action doit être faite <strong>impérativement sur la position réelle de l'arrêt</strong>.
+      Assurez-vous d'être physiquement présent à l'arrêt avant de récupérer les nouvelles coordonnées GPS.
+      <div style="margin-top:10px;">
+        <button class="btn btn-outline btn-sm" id="btn-ack-report">J'ai compris, continuer</button>
+      </div>
+    </div>
+
+    <div id="report-form-body" style="display:none;">
+      <div class="field">
+        <label>Nom de l'arrêt</label>
+        <input type="text" id="report-arret" readonly>
+      </div>
+      <div class="field">
+        <label>N° de l'arrêt</label>
+        <input type="text" id="report-numero" readonly>
+      </div>
+      <div class="field">
+        <label>Ville</label>
+        <input type="text" id="report-ville" readonly>
+      </div>
+      <div class="field">
+        <label>Nouvelle position GPS</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="report-gps" placeholder="ex. 44.85359, -0.634545" readonly style="flex:1;">
+          <button class="btn btn-outline btn-sm" id="btn-capture-gps">📍 Capter</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Commentaire (500 caractères max)</label>
+        <textarea id="report-comment" maxlength="500" placeholder="Décrivez l'erreur constatée..."></textarea>
+        <div class="textarea-counter"><span id="report-comment-count">0</span>/500</div>
+      </div>
+      <button class="btn btn-danger" id="btn-send-report">✉️ Envoyer le signalement</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE : ADMINISTRATEUR -->
+<div class="modal-overlay" id="modal-admin">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>Rubrique Administrateur</h2>
+      <button class="modal-close" data-close="modal-admin">✕</button>
+    </div>
+
+    <div id="admin-lock-screen">
+      <p class="locked-note">Accès protégé. Saisissez le code administrateur.</p>
+      <div class="field">
+        <input type="password" id="admin-code-input" placeholder="Code d'accès">
+      </div>
+      <button class="btn btn-primary" id="btn-admin-unlock">Déverrouiller</button>
+      <p class="locked-note" id="admin-error" style="color:var(--danger);display:none;">Code incorrect.</p>
+    </div>
+
+    <div id="admin-panel" style="display:none;">
+
+      <h3 style="font-size:.9rem;margin:14px 0 6px;">Options de recherche actives</h3>
+      <div class="card" style="padding:6px 16px;">
+        <div class="toggle-row">
+          <span class="lbl">Recherche Nom de l'arrêt</span>
+          <label class="switch"><input type="checkbox" data-toggle="arret" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Recherche par Véhicule</span>
+          <label class="switch"><input type="checkbox" data-toggle="vehicule" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Recherche par Commune</span>
+          <label class="switch"><input type="checkbox" data-toggle="commune" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Code postal (affichage)</span>
+          <label class="switch"><input type="checkbox" data-toggle="cp" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Recherche par Nom de la ligne</span>
+          <label class="switch"><input type="checkbox" data-toggle="ligne" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Recherche par Départ &amp; Terminus ligne</span>
+          <label class="switch"><input type="checkbox" data-toggle="terminus" checked><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Position GPS permanente (mini carte)</span>
+          <label class="switch"><input type="checkbox" data-toggle="gps" checked><span class="slider"></span></label>
+        </div>
+      </div>
+
+      <h3 style="font-size:.9rem;margin:18px 0 6px;">Mise à jour de la base arrêts</h3>
+      <div class="card">
+        <p class="locked-note" style="margin-top:0;">
+          Sélectionnez le nouveau fichier <strong>API_arrets_TBM2.xlsx</strong> (mêmes colonnes : LIBELLE, VEHICULE,
+          COMMUNE, NOM DE LIGNE, GEO POINT, NUMORDRE, NUMERO, Arrêt IHM, Départ &amp; Terminus Ligne). L'application
+          le convertit en <code>svarrettbm.json</code> et propose le téléchargement du fichier à replacer dans
+          <code>/data</code>.
+        </p>
+        <input type="file" id="admin-file-xlsx" accept=".xlsx" style="margin-bottom:10px;">
+        <button class="btn btn-primary" id="btn-update-base">⚙️ Mise à jour Base arrêts</button>
+        <p class="locked-note" id="admin-update-status"></p>
+      </div>
+
+      <h3 style="font-size:.9rem;margin:18px 0 6px;">Rectification géolocalisation</h3>
+      <div class="card">
+        <p class="locked-note" style="margin-top:0;">
+          Suite à réception d'un e-mail de signalement : recherchez l'arrêt concerné, corrigez ses coordonnées puis
+          enregistrez. La correction est appliquée localement et incluse dans le prochain export.
+        </p>
+        <div class="field">
+          <label>Rechercher l'arrêt à corriger</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="rectif-search" placeholder="Nom de l'arrêt...">
+            <div class="autocomplete-list" id="rectif-list"></div>
+          </div>
+        </div>
+        <div id="rectif-detail" style="display:none;">
+          <div class="field">
+            <label>Nouvelle position GPS</label>
+            <input type="text" id="rectif-gps" placeholder="44.xxxxx, -0.xxxxx">
+          </div>
+          <button class="btn btn-secondary" id="btn-rectif-save">💾 Enregistrer la correction</button>
+        </div>
+      </div>
+
+      <h3 style="font-size:.9rem;margin:18px 0 6px;">Gestion des utilisateurs</h3>
+      <div class="card">
+        <p class="locked-note" style="margin-top:0;">
+          Mettez à jour <strong>matriculesAM.xlsx</strong> puis importez-le ici pour ajouter un nouvel agent ou
+          bannir un matricule (motif : départ du service). Un fichier <code>matricules.json</code> mis à jour est
+          proposé au téléchargement, à déposer dans <code>/data</code>.
+        </p>
+        <input type="file" id="admin-file-matricules" accept=".xlsx" style="margin-bottom:10px;">
+        <button class="btn btn-primary" id="btn-update-matricules">⚙️ Mettre à jour les matricules</button>
+        <p class="locked-note" id="admin-matricules-status"></p>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Bannir un matricule (départ du service)</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="ban-search" placeholder="Matricule ou prénom...">
+            <div class="autocomplete-list" id="ban-list"></div>
+          </div>
+        </div>
+        <p class="locked-note" id="ban-status"></p>
+
+        <hr style="border:none;border-top:1px solid var(--surface-alt);margin:14px 0;">
+        <p class="locked-note" style="margin-top:0;">
+          Réinitialisation CGU / connexion — <strong>sur cet appareil uniquement</strong> (aucun accès distant aux
+          autres appareils n'est possible sans serveur central, voir la notice administrateur).
+        </p>
+        <button class="btn btn-outline btn-sm" id="btn-reset-cgu-device">🔄 Réinitialiser CGU sur cet appareil</button>
+      </div>
+
+      <button class="btn btn-outline" id="btn-admin-lock-again" style="margin-top:6px;">🔒 Verrouiller la rubrique</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/lib/xlsx.full.min.js"></script>
+<script src="js/lib/leaflet.js"></script>
+<script src="js/gps.js"></script>
+<script src="js/excel.js"></script>
+<script src="js/search.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
