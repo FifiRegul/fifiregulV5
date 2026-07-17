@@ -1,0 +1,13 @@
+{
+  "toggles": {
+    "arret": true,
+    "vehicule": true,
+    "commune": true,
+    "ligne": true,
+    "terminus": true,
+    "gps": true
+  },
+  "toggleVersion": 1,
+  "globalCguResetAt": null,
+  "userCguResetAt": {}
+}

@@ -10,7 +10,7 @@
    HTTPS) permettent tous deux l'activation complète.
 ========================================================= */
 
-const CACHE_NAME = 'fifi-regul-v5';
+const CACHE_NAME = 'fifi-regul-v5-1';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -22,12 +22,14 @@ const CORE_ASSETS = [
   './js/excel.js',
   './js/gps.js',
   './js/auth.js',
+  './js/state.js',
   './js/lib/leaflet.js',
   './js/lib/xlsx.full.min.js',
   './data/svarrettbm.json',
   './data/menu-lists.json',
   './data/communes.json',
   './data/matricules.json',
+  './data/app-state.json',
   './images/imagelogoTBM/logo.png',
   './images/imagefond/bus-bg.png',
   './images/FIFIRecherche.png',

@@ -26,7 +26,7 @@
 }
 
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;}
+html,body{margin:0;padding:0;overscroll-behavior-y:contain;}
 body{
   font-family:var(--font);
   background:var(--bg);
@@ -255,6 +255,9 @@ textarea:focus{outline:none;border-color:var(--fifi-red);}
 .auth-logo{height:52px;width:auto;object-fit:contain;margin-bottom:10px;}
 .auth-title{font-size:1.3rem;font-weight:800;margin:0 0 2px;color:var(--fifi-navy);letter-spacing:.03em;}
 .auth-sub{font-size:.82rem;color:var(--text-muted);margin:0 0 18px;}
+.auth-step-title{font-size:.95rem;font-weight:800;color:var(--fifi-red);letter-spacing:.04em;margin:0 0 14px;text-align:center;}
+.auth-switch-link{font-size:.8rem;color:var(--text-muted);margin-top:16px;cursor:pointer;text-align:center;}
+.auth-switch-link strong{color:var(--fifi-navy);text-decoration:underline;}
 .auth-card .field{text-align:left;}
 .auth-card input[type="text"]{text-align:center;letter-spacing:.08em;font-weight:700;text-transform:uppercase;}
 .auth-footnote{font-size:.68rem;color:var(--text-muted);margin-top:18px;}

@@ -49,6 +49,18 @@ const FifiAuth = (function () {
     return { status: 'ok', user };
   }
 
+  // Première identification : recherche par MATRICULE (colonne A), et non
+  // par code de connexion, pour un nouvel agent qui ne connaît pas encore
+  // son code.
+  function attemptFirstIdentification(matriculeInput) {
+    const matricule = (matriculeInput || '').toString().trim();
+    if (!matricule) return { status: 'empty' };
+    const user = users.find(u => String(u.matricule).trim() === matricule);
+    if (!user) return { status: 'unknown', matricule };
+    if (user.banni) return { status: 'banned', user };
+    return { status: 'ok', user };
+  }
+
   function loadCguMap() {
     try {
       const raw = localStorage.getItem(CGU_KEY);
@@ -63,6 +75,25 @@ const FifiAuth = (function () {
   function hasAcceptedCGU(code) {
     const map = loadCguMap();
     return !!map[normalizeCode(code)];
+  }
+
+  // Un appareil est considéré comme "déjà utilisé" (donc on lui propose
+  // directement l'écran Connexion plutôt que Première Identification) dès
+  // qu'au moins une acceptation CGU y a été enregistrée, peu importe le
+  // code concerné.
+  function hasAnyAcceptedCGU() {
+    const map = loadCguMap();
+    return Object.keys(map).length > 0;
+  }
+
+  // RAZ ciblée : n'efface que l'acceptation CGU d'un seul code, sans
+  // toucher aux autres éventuelles acceptations présentes sur cet appareil
+  // partagé. Utilisée quand une RAZ individuelle distante (par matricule)
+  // est détectée pour l'utilisateur qui vient de se connecter.
+  function clearSpecificCGU(code) {
+    const map = loadCguMap();
+    delete map[normalizeCode(code)];
+    saveCguMap(map);
   }
 
   function recordCGUAcceptance(user) {
@@ -111,7 +142,8 @@ const FifiAuth = (function () {
   }
 
   return {
-    init, attemptLogin, hasAcceptedCGU, recordCGUAcceptance, resetDeviceCGU,
+    init, attemptLogin, attemptFirstIdentification, hasAcceptedCGU, hasAnyAcceptedCGU,
+    recordCGUAcceptance, resetDeviceCGU, clearSpecificCGU,
     exportCguLogText, getAllUsers, findUser, toggleBan, replaceUsers, normalizeCode
   };
 })();

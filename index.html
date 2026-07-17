@@ -26,18 +26,19 @@
     <h1 class="auth-title">FIFI RÉGUL</h1>
     <p class="auth-sub">Connexion agent</p>
 
-    <!-- Étape 1 : saisie du code -->
-    <div id="auth-step-login">
+    <!-- Étape 1a : PREMIÈRE IDENTIFICATION (nouvel agent, via matricule) -->
+    <div id="auth-step-first" style="display:none;">
+      <h2 class="auth-step-title">PREMIÈRE IDENTIFICATION</h2>
       <div class="field">
-        <label for="auth-code">Code de connexion</label>
-        <input type="text" id="auth-code" placeholder="Ex. M11222" maxlength="6" autocomplete="username" autocapitalize="characters">
+        <label for="auth-matricule">Saisir votre matricule pour la première identification</label>
+        <input type="text" id="auth-matricule" placeholder="Ex : 123456789" inputmode="numeric" autocomplete="off">
       </div>
-      <button class="btn btn-primary" id="btn-auth-validate">Valider</button>
-      <p class="locked-note" id="auth-error" style="color:var(--danger);display:none;"></p>
+      <button class="btn btn-primary" id="btn-first-validate">Valider</button>
+      <p class="locked-note" id="auth-first-error" style="color:var(--danger);display:none;"></p>
 
       <div id="auth-unknown-block" style="display:none;margin-top:14px;">
         <div class="confirm-banner">
-          Code non reconnu. Une demande d'accès doit être validée par l'administrateur.
+          Matricule non reconnu. Une demande d'accès doit être validée par l'administrateur.
         </div>
         <div class="field">
           <label for="auth-req-matricule">Votre matricule</label>
@@ -53,6 +54,20 @@
         </div>
         <button class="btn btn-danger" id="btn-request-access">✉️ Demander l'accès par e-mail</button>
       </div>
+
+      <p class="auth-switch-link" id="link-to-login">Vous avez déjà un code de connexion ? <strong>Se connecter</strong></p>
+    </div>
+
+    <!-- Étape 1b : CONNEXION (agent déjà identifié, via code) -->
+    <div id="auth-step-login" style="display:none;">
+      <div class="field">
+        <label for="auth-code">Code de connexion</label>
+        <input type="text" id="auth-code" placeholder="Ex. M11222" maxlength="6" autocomplete="username" autocapitalize="characters">
+      </div>
+      <button class="btn btn-primary" id="btn-auth-validate">Valider</button>
+      <p class="locked-note" id="auth-error" style="color:var(--danger);display:none;"></p>
+
+      <p class="auth-switch-link" id="link-to-first">Première utilisation ? <strong>Saisir votre matricule</strong></p>
     </div>
 
     <!-- Étape 2 : CGU (première utilisation uniquement) -->
@@ -292,10 +307,6 @@
           <label class="switch"><input type="checkbox" data-toggle="commune" checked><span class="slider"></span></label>
         </div>
         <div class="toggle-row">
-          <span class="lbl">Code postal (affichage)</span>
-          <label class="switch"><input type="checkbox" data-toggle="cp" checked><span class="slider"></span></label>
-        </div>
-        <div class="toggle-row">
           <span class="lbl">Recherche par Nom de la ligne</span>
           <label class="switch"><input type="checkbox" data-toggle="ligne" checked><span class="slider"></span></label>
         </div>
@@ -307,6 +318,8 @@
           <span class="lbl">Position GPS permanente (mini carte)</span>
           <label class="switch"><input type="checkbox" data-toggle="gps" checked><span class="slider"></span></label>
         </div>
+        <button class="btn btn-primary btn-sm" id="btn-publish-toggles" style="margin-top:10px;">📤 Publier ces réglages pour tous les agents</button>
+        <p class="locked-note" id="publish-toggles-status"></p>
       </div>
 
       <h3 style="font-size:.9rem;margin:18px 0 6px;">Mise à jour de la base arrêts</h3>
@@ -363,11 +376,29 @@
           </div>
         </div>
         <p class="locked-note" id="ban-status"></p>
+      </div>
+
+      <h3 style="font-size:.9rem;margin:18px 0 6px;">Réinitialisation des CGU / connexions</h3>
+      <div class="card">
+        <p class="locked-note" style="margin-top:0;">
+          Ces 2 premières actions s'appliquent à <strong>tous les appareils</strong>, dès leur prochain chargement de
+          l'application (via le fichier <code>data/app-state.json</code>, à redéposer après chaque action — voir la
+          notice administrateur).
+        </p>
+        <button class="btn btn-danger btn-sm" id="btn-reset-cgu-global">🌐 Réinitialiser les CGU pour TOUS les agents</button>
+        <p class="locked-note" id="reset-cgu-global-status"></p>
+
+        <div class="field" style="margin-top:14px;">
+          <label>RAZ CGU individuelle (matricule d'un agent)</label>
+          <input type="text" id="reset-cgu-matricule" placeholder="Ex. 11222">
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-reset-cgu-individual">🔄 Réinitialiser les CGU de cet agent uniquement</button>
+        <p class="locked-note" id="reset-cgu-individual-status"></p>
 
         <hr style="border:none;border-top:1px solid var(--surface-alt);margin:14px 0;">
         <p class="locked-note" style="margin-top:0;">
-          Réinitialisation CGU / connexion — <strong>sur cet appareil uniquement</strong> (aucun accès distant aux
-          autres appareils n'est possible sans serveur central, voir la notice administrateur).
+          Action locale, immédiate, <strong>sur cet appareil uniquement</strong> (ne nécessite aucun redépôt de
+          fichier) :
         </p>
         <button class="btn btn-outline btn-sm" id="btn-reset-cgu-device">🔄 Réinitialiser CGU sur cet appareil</button>
       </div>
@@ -385,6 +416,7 @@
 <script src="js/excel.js"></script>
 <script src="js/search.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/state.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@ const RESULT_LIMIT = 8;
 // --------------------------------------------------------------------------
 
 const TOGGLE_KEY = 'fifi_feature_toggles_v1';
-const DEFAULT_TOGGLES = { arret: true, vehicule: true, commune: true, cp: true, ligne: true, terminus: true, gps: true };
+const DEFAULT_TOGGLES = { arret: true, vehicule: true, commune: true, ligne: true, terminus: true, gps: true };
 
 let toggles = { ...DEFAULT_TOGGLES };
 let userMiniMap = null, userMarker = null;
@@ -40,18 +40,74 @@ function escapeHtml(str) {
 }
 
 /* =========================================================
-   AUTHENTIFICATION (code de connexion + CGU)
+   AUTHENTIFICATION (Première Identification par matricule,
+   puis Connexion par code à chaque visite suivante) + CGU
 ========================================================= */
+const SESSION_KEY = 'fifi_active_session_v1';
+
 function showAuthStep(id) {
-  ['auth-step-login', 'auth-step-cgu', 'auth-step-remember', 'auth-step-welcome'].forEach(s => {
+  ['auth-step-first', 'auth-step-login', 'auth-step-cgu', 'auth-step-remember', 'auth-step-welcome'].forEach(s => {
     document.getElementById(s).style.display = (s === id) ? '' : 'none';
   });
 }
 
+// Après validation d'un matricule (première identification) ou d'un code
+// (connexion), on convertit vers l'écran suivant commun (CGU ou bienvenue).
+function proceedAfterIdentification(user) {
+  currentUser = user;
+
+  // RAZ CGU individuelle ou globale déclenchée par l'administrateur et pas
+  // encore vue par cet appareil pour CET utilisateur : on force à nouveau
+  // l'écran CGU, même si ce code les avait déjà acceptées auparavant.
+  if (FifiState.hasNewerGlobalReset()) {
+    FifiAuth.resetDeviceCGU();
+    FifiState.markGlobalResetSeen();
+  }
+  if (FifiState.hasNewerUserReset(user.matricule)) {
+    FifiAuth.clearSpecificCGU(user.code);
+    FifiState.markUserResetSeen(user.matricule);
+  }
+
+  if (FifiAuth.hasAcceptedCGU(currentUser.code)) {
+    showWelcomeThenApp();
+  } else {
+    showAuthStep('auth-step-cgu');
+  }
+}
+
 function setupAuth() {
+  // --- Étape "Première Identification" (matricule) ---
+  const matriculeInput = document.getElementById('auth-matricule');
+  const firstErrorEl = document.getElementById('auth-first-error');
+  const unknownBlock = document.getElementById('auth-unknown-block');
+
+  document.getElementById('btn-first-validate').addEventListener('click', () => {
+    const result = FifiAuth.attemptFirstIdentification(matriculeInput.value);
+    firstErrorEl.style.display = 'none';
+    unknownBlock.style.display = 'none';
+
+    if (result.status === 'empty') {
+      firstErrorEl.textContent = "Merci de saisir votre matricule.";
+      firstErrorEl.style.display = '';
+      return;
+    }
+    if (result.status === 'unknown') {
+      firstErrorEl.textContent = "Matricule non reconnu. Une demande d'accès doit être validée par l'administrateur.";
+      firstErrorEl.style.display = '';
+      unknownBlock.style.display = '';
+      return;
+    }
+    if (result.status === 'banned') {
+      firstErrorEl.textContent = "Ce matricule n'est plus autorisé (compte désactivé). Contactez l'administrateur.";
+      firstErrorEl.style.display = '';
+      return;
+    }
+    proceedAfterIdentification(result.user);
+  });
+
+  // --- Étape "Connexion" (code, agents déjà identifiés) ---
   const codeInput = document.getElementById('auth-code');
   const errorEl = document.getElementById('auth-error');
-  const unknownBlock = document.getElementById('auth-unknown-block');
 
   codeInput.addEventListener('input', () => {
     codeInput.value = codeInput.value.toUpperCase();
@@ -60,7 +116,6 @@ function setupAuth() {
   document.getElementById('btn-auth-validate').addEventListener('click', () => {
     const result = FifiAuth.attemptLogin(codeInput.value);
     errorEl.style.display = 'none';
-    unknownBlock.style.display = 'none';
 
     if (result.status === 'empty') {
       errorEl.textContent = "Merci de saisir votre code de connexion.";
@@ -68,9 +123,8 @@ function setupAuth() {
       return;
     }
     if (result.status === 'unknown') {
-      errorEl.textContent = "Code non reconnu. Une demande d'accès doit être validée par l'administrateur.";
+      errorEl.textContent = "Code non reconnu. Utilisez \"Première utilisation\" ci-dessous pour vous identifier avec votre matricule.";
       errorEl.style.display = '';
-      unknownBlock.style.display = '';
       return;
     }
     if (result.status === 'banned') {
@@ -78,14 +132,12 @@ function setupAuth() {
       errorEl.style.display = '';
       return;
     }
-
-    currentUser = result.user;
-    if (FifiAuth.hasAcceptedCGU(currentUser.code)) {
-      showWelcomeThenApp();
-    } else {
-      showAuthStep('auth-step-cgu');
-    }
+    proceedAfterIdentification(result.user);
   });
+
+  // --- Bascule manuelle entre les 2 écrans ---
+  document.getElementById('link-to-login').addEventListener('click', () => showAuthStep('auth-step-login'));
+  document.getElementById('link-to-first').addEventListener('click', () => showAuthStep('auth-step-first'));
 
   // CGU
   const cguCheckbox = document.getElementById('auth-cgu-checkbox');
@@ -102,7 +154,7 @@ function setupAuth() {
     showWelcomeThenApp();
   });
 
-  // Demande d'accès (code inconnu)
+  // Demande d'accès (matricule inconnu)
   document.getElementById('btn-request-access').addEventListener('click', () => {
     const matricule = document.getElementById('auth-req-matricule').value.trim();
     const nom = document.getElementById('auth-req-nom').value.trim();
@@ -135,10 +187,37 @@ function showWelcomeThenApp() {
   document.getElementById('auth-welcome-text').textContent =
     `Bonjour, ${currentUser.prenom || ''} excellente journée`.replace(/\s+/g, ' ').trim();
   setTimeout(() => {
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-shell').style.display = '';
-    afterLoginBoot();
+    revealApp();
   }, 3000);
+}
+
+// Affiche l'app et mémorise une session active (sessionStorage) pour
+// qu'un rafraîchissement accidentel de la page (ex. geste de scroll sur
+// smartphone) ne déconnecte plus l'utilisateur — voir resumeSessionIfAny().
+function revealApp() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app-shell').style.display = '';
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ code: currentUser.code })); } catch (e) {}
+  afterLoginBoot();
+}
+
+// Reprend une session déjà active dans cet onglet/cette fenêtre (même après
+// un rechargement de page), sans repasser par l'écran de connexion. Renvoie
+// true si une session a bien été reprise.
+function resumeSessionIfAny() {
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
+  if (!saved || !saved.code) return false;
+  const result = FifiAuth.attemptLogin(saved.code);
+  if (result.status !== 'ok') {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+    return false;
+  }
+  currentUser = result.user;
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app-shell').style.display = '';
+  afterLoginBoot();
+  return true;
 }
 
 /* =========================================================
@@ -149,6 +228,18 @@ function loadToggles() {
     const raw = localStorage.getItem(TOGGLE_KEY);
     toggles = raw ? { ...DEFAULT_TOGGLES, ...JSON.parse(raw) } : { ...DEFAULT_TOGGLES };
   } catch (e) { toggles = { ...DEFAULT_TOGGLES }; }
+
+  // Des réglages publiés par l'administrateur (data/app-state.json) plus
+  // récents que ceux déjà vus sur cet appareil remplacent les réglages
+  // locaux : c'est ce qui permet une vraie diffusion "pour tous les agents".
+  if (FifiState.hasNewerToggles()) {
+    const remote = FifiState.getRemoteToggles();
+    if (remote) {
+      toggles = { ...DEFAULT_TOGGLES, ...remote };
+      saveToggles();
+    }
+    FifiState.markTogglesSeen();
+  }
 }
 function saveToggles() {
   localStorage.setItem(TOGGLE_KEY, JSON.stringify(toggles));
@@ -346,7 +437,7 @@ function renderResults(results) {
         <div class="result-row"><span class="k">Nom de l'arrêt</span><span class="v">${escapeHtml(s.libelle)}</span></div>
         <div class="result-row"><span class="k">Véhicule</span><span class="v">${escapeHtml(s.vehicule || '—')}</span></div>
         <div class="result-row"><span class="k">Sens ligne</span><span class="v">${escapeHtml(s.sens || '—')}</span></div>
-        <div class="result-row"><span class="k">Commune</span><span class="v">${escapeHtml(s.commune || '—')}${toggles.cp && s.cp ? ' ' + s.cp : ''}</span></div>
+        <div class="result-row"><span class="k">Commune</span><span class="v">${escapeHtml(s.commune || '—')}${s.cp ? ' ' + s.cp : ''}</span></div>
         <div class="result-row"><span class="k">Nom de la ligne</span><span class="v">${escapeHtml(s.nomLigne || 'Non renseigné')}</span></div>
         <div class="result-row"><span class="k">INFO • Nom Arrêt IHM</span><span class="v">${escapeHtml(s.arretIHM || '—')}</span></div>
         <div class="result-row"><span class="k">INFO • N° Arrêt</span><span class="v">${escapeHtml(s.numero != null ? String(s.numero) : '—')}</span></div>
@@ -501,6 +592,16 @@ function setupAdmin() {
     });
   });
 
+  document.getElementById('btn-publish-toggles').addEventListener('click', () => {
+    const state = FifiState.buildExport({ toggles, bumpToggleVersion: true });
+    FifiState.markTogglesSeen(); // l'appareil de l'administrateur a déjà les réglages en cours
+    FifiExcel.downloadJSON(state, 'app-state.json');
+    document.getElementById('publish-toggles-status').textContent =
+      "Fichier app-state.json téléchargé : déposez-le dans /data pour appliquer ces réglages à tous les agents dès leur prochaine ouverture de l'application.";
+    document.getElementById('publish-toggles-status').style.color = 'var(--success)';
+    toast("Réglages publiés (fichier à déposer).");
+  });
+
   // Mise à jour Base arrêts
   document.getElementById('btn-update-base').addEventListener('click', async () => {
     const fileInput = document.getElementById('admin-file-xlsx');
@@ -633,7 +734,35 @@ function setupAdmin() {
     toast("Utilisateur réactivé pour cette session — déposez le fichier téléchargé pour appliquer partout.");
   });
 
-  // Réinitialisation CGU sur cet appareil
+  // Réinitialisation CGU pour TOUS les agents (globale, via app-state.json)
+  document.getElementById('btn-reset-cgu-global').addEventListener('click', () => {
+    const state = FifiState.buildExport({ toggles, triggerGlobalReset: true });
+    FifiState.markGlobalResetSeen(); // l'appareil de l'administrateur repart aussi à zéro
+    FifiAuth.resetDeviceCGU();
+    FifiExcel.downloadJSON(state, 'app-state.json');
+    document.getElementById('reset-cgu-global-status').textContent =
+      "Fichier app-state.json téléchargé : déposez-le dans /data. Chaque agent devra revalider les CGU à sa prochaine connexion.";
+    document.getElementById('reset-cgu-global-status').style.color = 'var(--success)';
+    toast("RAZ CGU globale préparée (fichier à déposer).");
+  });
+
+  // Réinitialisation CGU d'un seul agent (individuelle, via app-state.json)
+  document.getElementById('btn-reset-cgu-individual').addEventListener('click', () => {
+    const matricule = document.getElementById('reset-cgu-matricule').value.trim();
+    const statusEl = document.getElementById('reset-cgu-individual-status');
+    if (!matricule) { toast("Renseignez le matricule de l'agent concerné."); return; }
+    const user = FifiAuth.getAllUsers().find(u => String(u.matricule) === matricule);
+    if (!user) { statusEl.textContent = "Matricule introuvable."; statusEl.style.color = 'var(--danger)'; return; }
+    const state = FifiState.buildExport({ toggles, triggerUserResetMatricule: matricule });
+    FifiState.markUserResetSeen(matricule);
+    FifiExcel.downloadJSON(state, 'app-state.json');
+    statusEl.textContent =
+      `Fichier app-state.json téléchargé : déposez-le dans /data. ${user.prenom} (matricule ${matricule}) devra revalider les CGU à sa prochaine connexion.`;
+    statusEl.style.color = 'var(--success)';
+    toast("RAZ CGU individuelle préparée (fichier à déposer).");
+  });
+
+  // Réinitialisation CGU sur cet appareil (locale, immédiate)
   document.getElementById('btn-reset-cgu-device').addEventListener('click', () => {
     FifiAuth.resetDeviceCGU();
     toast("Validations CGU réinitialisées sur cet appareil.");
@@ -695,7 +824,7 @@ async function boot() {
   setupAuth();
 
   try {
-    await Promise.all([FifiData.init(), FifiAuth.init()]);
+    await Promise.all([FifiData.init(), FifiAuth.init(), FifiState.init()]);
   } catch (e) {
     toast("Erreur de chargement des données.", 5000);
   }
@@ -704,6 +833,17 @@ async function boot() {
   const splash = document.getElementById('bus-bg-splash');
   splash.classList.add('hidden');
   setTimeout(() => splash.remove(), 600);
+
+  // Une session était déjà active dans cet onglet (ex. rafraîchissement
+  // accidentel de la page sur smartphone) : on rouvre directement l'app,
+  // sans repasser par l'écran de connexion.
+  const resumed = resumeSessionIfAny();
+  if (!resumed) {
+    // Appareil jamais utilisé (aucune CGU acceptée localement) -> écran
+    // "Première Identification" (matricule). Sinon -> écran "Connexion"
+    // (code), déjà connu de cet appareil.
+    showAuthStep(FifiAuth.hasAnyAcceptedCGU() ? 'auth-step-login' : 'auth-step-first');
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').catch(() => {

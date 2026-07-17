@@ -1,4 +1,4 @@
-# FIFI RÉGUL — Notice d'utilisation (v5.0)
+# FIFI RÉGUL — Notice d'utilisation (v5.1)
 
 Cette notice s'adresse aux **agents utilisateurs**. La procédure d'administration
 (gestion des matricules, mise à jour de la base, code d'accès) fait l'objet d'un
@@ -8,16 +8,29 @@ document séparé : `ADMIN-NOTICE.md`, à ne pas diffuser aux utilisateurs.
 
 1. Ouvrez le lien de l'application (fourni par votre administrateur).
 2. Un écran de chargement s'affiche 3 secondes le temps que l'application se prépare.
-3. Saisissez votre **Code de connexion** personnel (format type `M11222`, communiqué
-   par l'administrateur). Cliquez sur **Valider**.
-4. Lors de votre toute première connexion, l'écran des **Conditions Générales
-   d'Utilisation** s'affiche : lisez-les et cochez la case pour continuer.
-   Elles ne réapparaîtront plus ensuite sur cet appareil.
-5. Votre code de connexion vous est rappelé une dernière fois à l'écran : notez-le,
-   il vous sera redemandé à **chaque** ouverture de l'application. Vous pouvez le
-   sauvegarder dans le gestionnaire de mots de passe de votre téléphone/PC.
+3. Sur un appareil jamais utilisé, l'écran **PREMIÈRE IDENTIFICATION** s'affiche :
+   saisissez votre **matricule** (et non votre code), puis cliquez sur **Valider**.
+4. L'écran des **Conditions Générales d'Utilisation** s'affiche : lisez-les et
+   cochez la case pour continuer. Elles ne réapparaîtront plus ensuite sur cet
+   appareil, sauf réinitialisation par l'administrateur.
+5. Votre **Code de connexion** personnel vous est alors communiqué à l'écran :
+   notez-le, il vous sera redemandé à **chaque** ouverture suivante de
+   l'application (écran "Connexion"). Vous pouvez le sauvegarder dans le
+   gestionnaire de mots de passe de votre téléphone/PC.
 6. Un message de bienvenue personnalisé s'affiche 3 secondes, puis l'application
    s'ouvre sur l'écran de recherche.
+
+## 2. Utilisations suivantes
+
+À chaque nouvelle ouverture, l'écran **Connexion** vous demande directement votre
+**Code de connexion** (plus besoin du matricule). Si vous partagez un appareil
+avec un collègue qui n'a jamais utilisé l'application dessus, un lien "Première
+utilisation ? Saisir votre matricule" permet de basculer vers l'écran d'identification.
+
+Un rafraîchissement accidentel de la page (par exemple un geste de scroll sur
+smartphone) ne vous déconnecte plus : votre session reste active tant que vous
+ne fermez pas réellement l'application ou l'onglet.
+
 
 ### Vous n'avez pas encore de code ?
 
@@ -27,14 +40,14 @@ renseignez votre matricule, votre nom et votre poste, puis cliquez sur
 destination de l'administrateur. Vous recevrez votre code personnel dans les
 meilleurs délais.
 
-## 2. Installer l'application sur l'écran d'accueil
+## 3. Installer l'application sur l'écran d'accueil
 
 Si votre navigateur le propose, un bandeau **"Installer FIFI Régul"** apparaît en
 haut de l'écran après la connexion. Un appui sur **Installer** ajoute une icône sur
 votre écran d'accueil, comme une application classique. Vous pouvez ignorer ce
 bandeau avec **Plus tard** ; il ne réapparaîtra pas ensuite sur cet appareil.
 
-## 3. FIFI Recherche
+## 4. FIFI Recherche
 
 Renseignez un ou plusieurs critères — inutile de tous les remplir :
 
@@ -55,7 +68,7 @@ Une mini-carte affiche votre position GPS en permanence (sauf si cette option a
 
 Appuyez sur **🔍 Rechercher** pour afficher les résultats (jusqu'à 8 affichés).
 
-## 4. FIFI Résultat(s)
+## 5. FIFI Résultat(s)
 
 Chaque résultat affiche : nom de l'arrêt, véhicule, sens ligne, commune, nom de
 ligne, nom d'arrêt IHM, n° d'arrêt, départ & terminus, une mini-carte de
@@ -68,7 +81,7 @@ localisation, ainsi que :
   physiquement sur place avant de capter la nouvelle position GPS. Un e-mail
   pré-rempli s'ouvre ensuite dans Outlook à destination de l'administrateur.
 
-## 5. Bon à savoir
+## 6. Bon à savoir
 
 - L'application est un outil d'aide non officiel : elle ne remplace pas la
   connaissance du terrain ni les procédures TBM/Keolis.
