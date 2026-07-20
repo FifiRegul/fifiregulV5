@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FIFI RÉGUL — Géolocalisation des arrêts TBM</title>
 <meta name="theme-color" content="#12233D">
-<meta name="robots" content="noindex, nofollow">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self' https://*.tile.openstreetmap.org; font-src 'self'; object-src 'none'; base-uri 'self';">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/lib/leaflet.css">
@@ -25,7 +22,7 @@
 <!-- ÉCRAN D'INSCRIPTION / CONNEXION (affiché avant toute autre vue) -->
 <div id="auth-screen" class="auth-screen">
   <div class="auth-card">
-    <img class="auth-logo img-fallback-hide" src="images/imagelogoTBM/logo.png" alt="Logo TBM">
+    <img class="auth-logo" src="images/imagelogoTBM/logo.png" alt="Logo TBM" onerror="this.style.display='none'">
     <h1 class="auth-title">FIFI RÉGUL</h1>
     <p class="auth-sub">Connexion agent</p>
 
@@ -45,7 +42,7 @@
         </div>
         <div class="field">
           <label for="auth-req-matricule">Votre matricule</label>
-          <input type="text" id="auth-req-matricule" placeholder="Ex. 11222">
+          <input type="text" id="auth-req-matricule" placeholder="Ex. 12345">
         </div>
         <div class="field">
           <label for="auth-req-nom">Nom, prénom</label>
@@ -65,7 +62,7 @@
     <div id="auth-step-login" style="display:none;">
       <div class="field">
         <label for="auth-code">Code de connexion</label>
-        <input type="text" id="auth-code" placeholder="Ex. M11222" maxlength="6" autocomplete="username" autocapitalize="characters">
+        <input type="text" id="auth-code" placeholder="Ex. A12345" maxlength="6" autocomplete="username" autocapitalize="characters">
       </div>
       <button class="btn btn-primary" id="btn-auth-validate">Valider</button>
       <p class="locked-note" id="auth-error" style="color:var(--danger);display:none;"></p>
@@ -113,7 +110,7 @@
 <div class="app-shell" id="app-shell" style="display:none;">
 
   <header class="app-header">
-    <img class="logo img-fallback-hide" src="images/imagelogoTBM/logo.png" alt="Logo TBM">
+    <img class="logo" src="images/imagelogoTBM/logo.png" alt="Logo TBM" onerror="this.style.display='none'">
     <div class="titles">
       <span class="app-name">FIFI RÉGUL</span>
       <span class="app-sub">Géolocalisation des arrêts TBM</span>
@@ -136,7 +133,7 @@
     <section id="view-recherche" class="view active">
 
       <div class="section-title">
-        <img src="images/FIFIRecherche.png" alt="" class="img-fallback-hide">
+        <img src="images/FIFIRecherche.png" alt="" onerror="this.style.display='none'">
         <div>
           <h1>FIFI Recherche</h1>
           <p>Renseignez un ou plusieurs critères, pas besoin de tout remplir</p>
@@ -211,7 +208,7 @@
     <!-- VUE 2 : FIFI RESULTAT(S) -->
     <section id="view-resultats" class="view">
       <div class="section-title">
-        <img src="images/FIFIResultat.png" alt="" class="img-fallback-hide">
+        <img src="images/FIFIResultat.png" alt="" onerror="this.style.display='none'">
         <div>
           <h1>FIFI Résultat(s)</h1>
           <p id="resultats-count">0 résultat</p>
