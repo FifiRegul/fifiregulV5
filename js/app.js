@@ -6,7 +6,11 @@
 ========================================================= */
 
 // ---- Configuration à adapter par l'administrateur ----------------------
-const ADMIN_CODE = "11222AM*";
+// Sel + empreinte PBKDF2-SHA256 (100000 itérations) du code d'accès
+// administrateur — jamais stocké en clair dans un fichier public. Même
+// mécanisme que les codes agents (voir js/auth.js et SECURITY-NOTES.md).
+const ADMIN_SALT = "eb144e3cc541cef89c3f2445c56af181";
+const ADMIN_CODE_HASH = "1ee25eb3eec6f7353f100787c04a4ef246bd7bd1d265230c1103d4908b9c4095";
 // Adresses à renseigner/confirmer ultérieurement :
 const ADMIN_EMAILS = ["fifiregul@free.fr"];
 const RESULT_LIMIT = 8;
@@ -39,6 +43,15 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
+// Frein simple contre les essais répétés (protection limitée côté client
+// uniquement, voir SECURITY-NOTES.md) : désactive brièvement un bouton
+// après des tentatives infructueuses, avec un délai qui augmente.
+function throttleButton(btn, attempts) {
+  const delay = Math.min(attempts * 500, 4000);
+  btn.disabled = true;
+  setTimeout(() => { btn.disabled = false; }, delay);
+}
+
 /* =========================================================
    AUTHENTIFICATION (Première Identification par matricule,
    puis Connexion par code à chaque visite suivante) + CGU
@@ -58,17 +71,17 @@ function proceedAfterIdentification(user) {
 
   // RAZ CGU individuelle ou globale déclenchée par l'administrateur et pas
   // encore vue par cet appareil pour CET utilisateur : on force à nouveau
-  // l'écran CGU, même si ce code les avait déjà acceptées auparavant.
+  // l'écran CGU, même si cet agent les avait déjà acceptées auparavant.
   if (FifiState.hasNewerGlobalReset()) {
     FifiAuth.resetDeviceCGU();
     FifiState.markGlobalResetSeen();
   }
   if (FifiState.hasNewerUserReset(user.matricule)) {
-    FifiAuth.clearSpecificCGU(user.code);
+    FifiAuth.clearSpecificCGU(user.matricule);
     FifiState.markUserResetSeen(user.matricule);
   }
 
-  if (FifiAuth.hasAcceptedCGU(currentUser.code)) {
+  if (FifiAuth.hasAcceptedCGU(currentUser.matricule)) {
     showWelcomeThenApp();
   } else {
     showAuthStep('auth-step-cgu');
@@ -80,8 +93,10 @@ function setupAuth() {
   const matriculeInput = document.getElementById('auth-matricule');
   const firstErrorEl = document.getElementById('auth-first-error');
   const unknownBlock = document.getElementById('auth-unknown-block');
+  const btnFirstValidate = document.getElementById('btn-first-validate');
+  let firstAttempts = 0;
 
-  document.getElementById('btn-first-validate').addEventListener('click', () => {
+  btnFirstValidate.addEventListener('click', () => {
     const result = FifiAuth.attemptFirstIdentification(matriculeInput.value);
     firstErrorEl.style.display = 'none';
     unknownBlock.style.display = 'none';
@@ -95,6 +110,8 @@ function setupAuth() {
       firstErrorEl.textContent = "Matricule non reconnu. Une demande d'accès doit être validée par l'administrateur.";
       firstErrorEl.style.display = '';
       unknownBlock.style.display = '';
+      firstAttempts++;
+      throttleButton(btnFirstValidate, firstAttempts);
       return;
     }
     if (result.status === 'banned') {
@@ -102,19 +119,24 @@ function setupAuth() {
       firstErrorEl.style.display = '';
       return;
     }
+    firstAttempts = 0;
     proceedAfterIdentification(result.user);
   });
 
   // --- Étape "Connexion" (code, agents déjà identifiés) ---
   const codeInput = document.getElementById('auth-code');
   const errorEl = document.getElementById('auth-error');
+  const btnAuthValidate = document.getElementById('btn-auth-validate');
+  let loginAttempts = 0;
 
   codeInput.addEventListener('input', () => {
     codeInput.value = codeInput.value.toUpperCase();
   });
 
-  document.getElementById('btn-auth-validate').addEventListener('click', () => {
-    const result = FifiAuth.attemptLogin(codeInput.value);
+  btnAuthValidate.addEventListener('click', async () => {
+    btnAuthValidate.disabled = true;
+    const result = await FifiAuth.attemptLogin(codeInput.value);
+    btnAuthValidate.disabled = false;
     errorEl.style.display = 'none';
 
     if (result.status === 'empty') {
@@ -125,6 +147,8 @@ function setupAuth() {
     if (result.status === 'unknown') {
       errorEl.textContent = "Code non reconnu. Utilisez \"Première utilisation\" ci-dessous pour vous identifier avec votre matricule.";
       errorEl.style.display = '';
+      loginAttempts++;
+      throttleButton(btnAuthValidate, loginAttempts);
       return;
     }
     if (result.status === 'banned') {
@@ -132,6 +156,7 @@ function setupAuth() {
       errorEl.style.display = '';
       return;
     }
+    loginAttempts = 0;
     proceedAfterIdentification(result.user);
   });
 
@@ -147,7 +172,9 @@ function setupAuth() {
   });
   cguContinueBtn.addEventListener('click', () => {
     FifiAuth.recordCGUAcceptance(currentUser);
-    document.getElementById('auth-code-reminder-value').textContent = currentUser.code;
+    // Le code de connexion est haché : l'application ne peut plus le
+    // rappeler à l'écran (voir SECURITY-NOTES.md). Il doit avoir été
+    // communiqué à l'agent directement par l'administrateur au préalable.
     showAuthStep('auth-step-remember');
   });
   document.getElementById('btn-remember-ack').addEventListener('click', () => {
@@ -191,29 +218,32 @@ function showWelcomeThenApp() {
   }, 3000);
 }
 
-// Affiche l'app et mémorise une session active (sessionStorage) pour
-// qu'un rafraîchissement accidentel de la page (ex. geste de scroll sur
+// Affiche l'app et mémorise une session active (sessionStorage, par
+// matricule — jamais par code, qui n'existe plus en clair) pour qu'un
+// rafraîchissement accidentel de la page (ex. geste de scroll sur
 // smartphone) ne déconnecte plus l'utilisateur — voir resumeSessionIfAny().
 function revealApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-shell').style.display = '';
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ code: currentUser.code })); } catch (e) {}
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ matricule: currentUser.matricule })); } catch (e) {}
   afterLoginBoot();
 }
 
 // Reprend une session déjà active dans cet onglet/cette fenêtre (même après
-// un rechargement de page), sans repasser par l'écran de connexion. Renvoie
-// true si une session a bien été reprise.
+// un rechargement de page), sans repasser par l'écran de connexion. Ne
+// nécessite pas de re-saisir le code : on retrouve simplement l'agent par
+// son matricule (donnée publique, non secrète) dans la liste déjà chargée.
+// Renvoie true si une session a bien été reprise.
 function resumeSessionIfAny() {
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
-  if (!saved || !saved.code) return false;
-  const result = FifiAuth.attemptLogin(saved.code);
-  if (result.status !== 'ok') {
+  if (!saved || !saved.matricule) return false;
+  const user = FifiAuth.getAllUsers().find(u => String(u.matricule) === String(saved.matricule));
+  if (!user || user.banni) {
     try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
     return false;
   }
-  currentUser = result.user;
+  currentUser = user;
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-shell').style.display = '';
   afterLoginBoot();
@@ -566,15 +596,26 @@ function setupAdmin() {
     }
   });
 
-  document.getElementById('btn-admin-unlock').addEventListener('click', () => {
+  let adminAttempts = 0;
+  document.getElementById('btn-admin-unlock').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-admin-unlock');
     const val = document.getElementById('admin-code-input').value;
-    if (val === ADMIN_CODE) {
+    btn.disabled = true;
+    const hash = await pbkdf2Hex(val, ADMIN_SALT);
+    if (hash === ADMIN_CODE_HASH) {
+      adminAttempts = 0;
       adminUnlocked = true;
       document.getElementById('admin-lock-screen').style.display = 'none';
       document.getElementById('admin-panel').style.display = '';
       renderToggleSwitches();
+      btn.disabled = false;
     } else {
+      adminAttempts++;
       document.getElementById('admin-error').style.display = '';
+      // Frein simple contre les essais répétés (protection limitée côté
+      // client, voir SECURITY-NOTES.md) : délai croissant après chaque échec.
+      const delay = Math.min(adminAttempts * 800, 5000);
+      setTimeout(() => { btn.disabled = false; }, delay);
     }
   });
 
@@ -871,3 +912,12 @@ function afterLoginBoot() {
 }
 
 document.addEventListener('DOMContentLoaded', boot);
+
+// Masque proprement une image si son fichier est introuvable (remplace les
+// gestionnaires onerror en ligne, incompatibles avec une CSP stricte
+// script-src 'self').
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('img.img-fallback-hide').forEach(img => {
+    img.addEventListener('error', () => { img.style.display = 'none'; });
+  });
+});

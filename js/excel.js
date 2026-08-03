@@ -124,7 +124,13 @@ const FifiExcel = (function () {
     };
   }
 
-  function convertWorkbookToMatricules(workbook) {
+  function randomSaltHex(bytesLen = 16) {
+    const arr = new Uint8Array(bytesLen);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function convertWorkbookToMatricules(workbook) {
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
@@ -136,14 +142,21 @@ const FifiExcel = (function () {
       prenom: findColumn(rows[0], 'Prenom utilisateur', 'Prénom utilisateur')
     };
 
-    return rows
-      .filter(r => cols.matricule && r[cols.matricule] != null && cols.code && r[cols.code] != null)
-      .map(r => ({
-        matricule: String(r[cols.matricule]).trim(),
-        code: String(r[cols.code]).trim().toUpperCase(),
-        prenom: cols.prenom && r[cols.prenom] ? String(r[cols.prenom]).trim() : '',
-        banni: false
-      }));
+    const validRows = rows.filter(r => cols.matricule && r[cols.matricule] != null && cols.code && r[cols.code] != null);
+
+    // Le hachage (voir js/auth.js, pbkdf2Hex) est volontairement lent : sur
+    // une trentaine d'agents cela reste rapide (quelques secondes), mais ne
+    // pas paralléliser à l'excès pour rester léger sur un poste peu puissant.
+    const results = [];
+    for (const r of validRows) {
+      const matricule = String(r[cols.matricule]).trim();
+      const code = String(r[cols.code]).trim().toUpperCase();
+      const prenom = cols.prenom && r[cols.prenom] ? String(r[cols.prenom]).trim() : '';
+      const salt = randomSaltHex();
+      const codeHash = await pbkdf2Hex(code, salt);
+      results.push({ matricule, salt, codeHash, prenom, banni: false });
+    }
+    return results;
   }
 
   function downloadJSON(obj, filename) {

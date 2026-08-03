@@ -223,6 +223,13 @@ const FifiData = (function () {
 /* ---------------------------------------------------------
    Autocomplétion générique attachée à un <input> + une <div class="autocomplete-list">
 --------------------------------------------------------- */
+function escapeHtmlAC(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 function attachAutocomplete(inputEl, listEl, suggestFn, onPick) {
   let activeIndex = -1;
   let currentItems = [];
@@ -237,7 +244,10 @@ function attachAutocomplete(inputEl, listEl, suggestFn, onPick) {
       listEl.classList.toggle('open', !!inputEl.value.trim());
       return;
     }
-    listEl.innerHTML = items.map((it, i) => `<div data-i="${i}">${it}</div>`).join('');
+    // Les valeurs affichées sont échappées (défense en profondeur si une
+    // donnée source contenait des caractères HTML) ; la sélection au clic
+    // ou au clavier utilise toujours la valeur brute via currentItems[i].
+    listEl.innerHTML = items.map((it, i) => `<div data-i="${i}">${escapeHtmlAC(it)}</div>`).join('');
     listEl.classList.add('open');
   }
 

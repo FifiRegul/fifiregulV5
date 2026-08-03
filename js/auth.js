@@ -1,8 +1,17 @@
 /* =========================================================
    FIFI RÉGUL — js/auth.js
-   Authentification par "Code de connexion" (data/matricules.json),
-   gestion des CGU (acceptation conservée sur l'appareil), et gestion
-   des comptes bannis (motif : départ du service).
+   Authentification par "Code de connexion", vérifiée par hachage
+   PBKDF2-SHA256 salé (data/matricules.json ne contient plus AUCUN code
+   en clair — voir SECURITY-NOTES.md), gestion des CGU (acceptation
+   conservée sur l'appareil), et gestion des comptes bannis (motif :
+   départ du service).
+
+   CONSÉQUENCE IMPORTANTE DU HACHAGE (à connaître) :
+   Un hachage ne peut pas être "déhaché" pour être réaffiché en clair —
+   c'est justement ce qui le rend sûr. L'application ne peut donc plus
+   rappeler son code à un agent lors de sa première identification :
+   ce code doit lui être communiqué directement par l'administrateur
+   (comme son matricule), avant sa première connexion.
 
    IMPORTANT (limite technique honnête, à connaître) :
    FIFI Régul est une application 100% cliente (HTML + JS + JSON, sans
@@ -20,9 +29,35 @@
      revanche n'agit que sur l'appareil utilisé au moment du clic.
 ========================================================= */
 
+// Nombre d'itérations PBKDF2. Un nombre élevé ralentit délibérément le
+// calcul du hash pour rendre une attaque par force brute hors-ligne (sur
+// un fichier matricules.json récupéré) beaucoup plus coûteuse, tout en
+// restant quasi instantané pour une seule vérification de connexion.
+const FIFI_PBKDF2_ITERATIONS = 100000;
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return bytes;
+}
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Calcule un hash PBKDF2-SHA256 (256 bits) d'un texte avec un sel donné
+// (hexadécimal). Utilisé aussi bien pour les codes agents que pour le code
+// administrateur (voir js/app.js).
+async function pbkdf2Hex(text, saltHex, iterations = FIFI_PBKDF2_ITERATIONS) {
+  const enc = new TextEncoder().encode(text);
+  const keyMaterial = await crypto.subtle.importKey('raw', enc, 'PBKDF2', false, ['deriveBits']);
+  const salt = hexToBytes(saltHex);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, keyMaterial, 256);
+  return bytesToHex(new Uint8Array(bits));
+}
+
 const FifiAuth = (function () {
 
-  let users = []; // [{matricule, code, prenom, banni}]
+  let users = []; // [{matricule, salt, codeHash, prenom, banni}]
 
   const CGU_KEY = 'fifi_cgu_accepted_v1';
   const LOG_KEY = 'fifi_cgu_log_v1';
@@ -40,18 +75,28 @@ const FifiAuth = (function () {
     return (code || '').toString().trim().toUpperCase();
   }
 
-  function attemptLogin(codeInput) {
+  // Vérifie le code saisi en le hachant avec le sel de CHAQUE agent et en
+  // comparant au hash stocké (aucun code n'est jamais conservé en clair,
+  // même en mémoire au-delà du temps de calcul du hash).
+  async function attemptLogin(codeInput) {
     const code = normalizeCode(codeInput);
     if (!code) return { status: 'empty' };
-    const user = users.find(u => normalizeCode(u.code) === code);
-    if (!user) return { status: 'unknown', code };
-    if (user.banni) return { status: 'banned', user };
-    return { status: 'ok', user };
+    for (const u of users) {
+      if (!u.salt || !u.codeHash) continue;
+      const hash = await pbkdf2Hex(code, u.salt);
+      if (hash === u.codeHash) {
+        if (u.banni) return { status: 'banned', user: u };
+        return { status: 'ok', user: u };
+      }
+    }
+    return { status: 'unknown' };
   }
 
   // Première identification : recherche par MATRICULE (colonne A), et non
   // par code de connexion, pour un nouvel agent qui ne connaît pas encore
-  // son code.
+  // s'il a déjà utilisé l'application sur cet appareil. Le matricule n'est
+  // pas un secret (il figure déjà sur son badge/ses documents RH), il reste
+  // donc en clair et consultable directement, contrairement au code.
   function attemptFirstIdentification(matriculeInput) {
     const matricule = (matriculeInput || '').toString().trim();
     if (!matricule) return { status: 'empty' };
@@ -72,27 +117,29 @@ const FifiAuth = (function () {
     try { localStorage.setItem(CGU_KEY, JSON.stringify(map)); } catch (e) { /* ignore */ }
   }
 
-  function hasAcceptedCGU(code) {
+  // La validation CGU est indexée par MATRICULE (et non plus par code,
+  // puisque le code n'existe plus en clair côté application).
+  function hasAcceptedCGU(matricule) {
     const map = loadCguMap();
-    return !!map[normalizeCode(code)];
+    return !!map[String(matricule)];
   }
 
   // Un appareil est considéré comme "déjà utilisé" (donc on lui propose
   // directement l'écran Connexion plutôt que Première Identification) dès
-  // qu'au moins une acceptation CGU y a été enregistrée, peu importe le
-  // code concerné.
+  // qu'au moins une acceptation CGU y a été enregistrée, peu importe
+  // l'agent concerné.
   function hasAnyAcceptedCGU() {
     const map = loadCguMap();
     return Object.keys(map).length > 0;
   }
 
-  // RAZ ciblée : n'efface que l'acceptation CGU d'un seul code, sans
+  // RAZ ciblée : n'efface que l'acceptation CGU d'un seul agent, sans
   // toucher aux autres éventuelles acceptations présentes sur cet appareil
   // partagé. Utilisée quand une RAZ individuelle distante (par matricule)
   // est détectée pour l'utilisateur qui vient de se connecter.
-  function clearSpecificCGU(code) {
+  function clearSpecificCGU(matricule) {
     const map = loadCguMap();
-    delete map[normalizeCode(code)];
+    delete map[String(matricule)];
     saveCguMap(map);
   }
 
@@ -100,7 +147,7 @@ const FifiAuth = (function () {
     const map = loadCguMap();
     const now = new Date();
     const ts = now.toISOString().slice(0, 19).replace('T', ' ');
-    map[normalizeCode(user.code)] = { matricule: user.matricule, prenom: user.prenom, ts };
+    map[String(user.matricule)] = { prenom: user.prenom, ts };
     saveCguMap(map);
 
     let log = [];
