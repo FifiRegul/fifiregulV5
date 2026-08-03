@@ -8,7 +8,7 @@
 // ---- Configuration à adapter par l'administrateur ----------------------
 const ADMIN_CODE = "11222AM*";
 // Adresses à renseigner/confirmer ultérieurement :
-const ADMIN_EMAILS = ["fifiregul@free.fr", "prenom.nom2@keolis.com"];
+const ADMIN_EMAILS = ["fifiregul@free.fr"];
 const RESULT_LIMIT = 8;
 // --------------------------------------------------------------------------
 
