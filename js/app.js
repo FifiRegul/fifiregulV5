@@ -9,8 +9,8 @@
 // Sel + empreinte PBKDF2-SHA256 (100000 itérations) du code d'accès
 // administrateur — jamais stocké en clair dans un fichier public. Même
 // mécanisme que les codes agents (voir js/auth.js et SECURITY-NOTES.md).
-const ADMIN_SALT = "eb144e3cc541cef89c3f2445c56af181";
-const ADMIN_CODE_HASH = "1ee25eb3eec6f7353f100787c04a4ef246bd7bd1d265230c1103d4908b9c4095";
+const ADMIN_SALT = "e01144ac69a9c9102f944b4072eb7e4b";
+const ADMIN_CODE_HASH = "9937291a46175a840c6cddbefed968b981c104fcfd9fc651853434b0a655906a";
 // Adresses à renseigner/confirmer ultérieurement :
 const ADMIN_EMAILS = ["fifiregul@free.fr"];
 const RESULT_LIMIT = 8;
